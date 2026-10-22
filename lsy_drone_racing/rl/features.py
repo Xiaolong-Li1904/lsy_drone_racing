@@ -1,20 +1,3 @@
-"""Policy observation: relative geometry only, shared by training (jax.numpy) and the controller (numpy).
-
-All vectors are expressed in the heading frame (world frame rotated by the drone's yaw), so no
-world position or gate number reaches the policy. Inputs are batched env observations
-(leading axis B); the controller adds a batch axis of 1.
-
-Layout (OBS_DIM = 46):
-  0:3   velocity                         3:6   angular velocity (as the env reports it)
-  6:9   body x axis                      9:12  body z axis (thrust direction)
-  12:14 sin/cos yaw (yaw is commanded absolutely, see actions.py)
-  14    height above ground
-  15:25 next gate: rel pos 3, normal 3 (flipped for reverse passes), lateral axis 3, sensed 1
-  25:35 gate after next, same layout     35    gate after next exists
-  36:42 2 nearest pillars (horizontal): rel xy 2, sensed 1 each
-  42:46 previous action in policy units [-1, 1]
-"""
-
 from __future__ import annotations
 
 N_PILLARS = 2
@@ -22,7 +5,6 @@ OBS_DIM = 46
 
 
 def quat_to_mat(q, xp):
-    """Rotation matrices of xyzw quaternions, shape (..., 3, 3)."""
     x, y, z, w = q[..., 0], q[..., 1], q[..., 2], q[..., 3]
     return xp.stack([
         xp.stack([1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)], axis=-1),
@@ -32,13 +14,11 @@ def quat_to_mat(q, xp):
 
 
 def _take(a, idx, xp):
-    """a[b, idx[b]] for a of shape (B, K, ...) and idx of shape (B,)."""
     idx = idx.reshape(idx.shape + (1,) * (a.ndim - 1))
     return xp.take_along_axis(a, idx, axis=1)[:, 0]
 
 
 def features(obs: dict, prev_action, xp):
-    """Policy input of shape (B, OBS_DIM) from batched env observations."""
     pos = obs["pos"]
     rot = quat_to_mat(obs["quat"], xp)
     yaw = xp.arctan2(rot[:, 1, 0], rot[:, 0, 0])
