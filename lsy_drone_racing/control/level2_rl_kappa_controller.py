@@ -7,11 +7,18 @@ velocity history (n_vhist) of fv-3 policies and kappa policies (train_ppo --kapp
   (episode_callback / reset), so the aggressiveness can be changed between laps without restarting.
 For kappa policies the roll/pitch command limit widens with kappa exactly as in training (kappa_k0,
 kappa_tilt_hi stored in the npz). No artificial delay / thrust change (unlike level3_rl_stress_controller).
+
+Flight log: every control step (time, full observation, policy input, raw/clipped output, sent action) is
+recorded in memory and saved to flight_logs/<date>_<time>_<policy>_k<kappa>.npz when the flight ends,
+also on Ctrl+C. ADR_LOG_DIR=<dir> changes the folder, ADR_LOG_DIR= (empty) disables logging.
 """
 
 from __future__ import annotations
 
+import atexit
+import json
 import os
+import time
 from pathlib import Path
 
 import numpy as np
@@ -28,6 +35,39 @@ class Level2RLKappaController(Level2RLController):
         super().__init__(obs, info, config)
         self._vel_hist = np.zeros((1, max(self._policy.n_vhist, 1), 3))  # newest first
         self._kappa = self._read_kappa()
+        self._log_init(config)
+
+    # ---- flight log -------------------------------------------------------------------------------
+    def _log_init(self, config):
+        self._log = None
+        log_dir = os.environ.get("ADR_LOG_DIR", str(Path(__file__).parents[2] / "flight_logs"))
+        if not log_dir:
+            return
+        policy = Path(os.environ.get("ADR_RL_POLICY", self.default_policy))
+        now = time.time()
+        stamp = time.strftime("%Y%m%d_%H%M%S", time.localtime(now)) + f"_{int(now * 1000) % 1000:03d}"
+        self._log_path = Path(log_dir) / f"{stamp}_{policy.stem}_k{self._kappa:.2f}.npz"
+        self._log_meta = {
+            "policy": str(policy), "kappa": self._kappa, "tilt_max": float(self._policy.tilt_max),
+            "kappa_tilt_hi": float(getattr(self._policy, "kappa_tilt_hi", 0.0)),
+            "thrust_min": self._thrust_min, "thrust_max": self._thrust_max,
+            "freq": int(config.env.freq), "control_mode": str(config.env.control_mode),
+            "drones": str(config.deploy.drones) if "deploy" in config else "",
+            "start_unix_time": now,
+        }
+        self._log = {"t": [], "wall": [], "obs": [], "x": [], "raw": [], "u": [], "action": []}
+        atexit.register(self._log_save)
+
+    def _log_save(self):
+        log = self._log
+        if not log or not log["t"]:
+            return
+        out = {k: np.asarray(log[k]) for k in ("t", "wall", "x", "raw", "u", "action")}
+        for k in log["obs"][0]:
+            out["obs_" + k] = np.stack([o[k] for o in log["obs"]])
+        out["meta"] = np.array(json.dumps(self._log_meta))
+        self._log_path.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(self._log_path, **out)
 
     def _read_kappa(self) -> float:
         k = float(os.environ.get("ADR_KAPPA", "0"))
@@ -40,6 +80,7 @@ class Level2RLKappaController(Level2RLController):
         return float(np.clip(k, 0.0, 1.0))
 
     def compute_control(self, obs, info=None):
+        t_in = time.perf_counter()
         batch = {k: np.asarray(v)[None] for k, v in obs.items()}
         if self._policy.kappa:
             batch["kappa"] = np.array([self._kappa], np.float32)
@@ -60,9 +101,25 @@ class Level2RLKappaController(Level2RLController):
         action = to_env(u, self._thrust_min, self._thrust_max, np, tilt)
         if wide:
             action[:, :2] = u[:, :2] * tilt
-        return action[0].astype(np.float32)
+        action = action[0].astype(np.float32)
+        if self._log is not None:
+            log = self._log
+            log["t"].append(t_in)
+            log["wall"].append(time.time())
+            log["obs"].append({k: np.array(v) for k, v in obs.items()})
+            log["x"].append(x[0].astype(np.float32))
+            log["raw"].append(raw[0].astype(np.float32))
+            log["u"].append(u[0].astype(np.float32))
+            log["action"].append(action.copy())
+        return action
+
+    def step_callback(self, action, obs, reward, terminated, truncated, info):
+        if terminated or truncated:
+            self._log_save()
+        return super().step_callback(action, obs, reward, terminated, truncated, info)
 
     def episode_callback(self):
+        self._log_save()
         super().episode_callback()
         self._vel_hist = np.zeros_like(self._vel_hist)
         self._kappa = self._read_kappa()
