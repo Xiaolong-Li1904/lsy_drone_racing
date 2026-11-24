@@ -1,0 +1,28 @@
+.vscode/
+**.egg-info/
+**/__pycache__/
+submission.csv
+logs
+secrets
+**/*.secret
+saves
+.pytest_cache
+**/*.json
+!devcontainer.json
+**/*.csv
+plots/
+c_generated_code/
+/build
+
+# ProperDocs build output
+site/
+
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+# ROS2 workspace build artifacts
+ros_ws/src/motion_capture_tracking
+ros_ws/build
+ros_ws/install
+ros_ws/log
+acados/
