@@ -103,20 +103,20 @@ echo 0.3 > kappa.txt && ./fly.sh
 网络输出、发出的指令），飞完或 Ctrl+C 时存到 `flight_logs/<日期>_<时间>_<网络>_k<kappa>.npz`。
 不影响控制（每步多约 0.05 ms）。`export ADR_LOG_DIR=` 置空可关闭。
 
-用 `./fly.sh` 起飞时，记录会自动上传到 GitHub 的 `flight-logs` 分支（每次约 80 KB）。
+用 `./fly.sh` 起飞时，记录会自动上传到 **adr_project** 的 `flight-logs` 分支（不管从哪个仓库 clone 的）（每次约 80 KB）。
 **第一次上传前**在实验室电脑设置一次（之后不再问密码）：
 
 ```bash
 git config --global user.name  "<GitHub 用户名>"
 git config --global user.email "<GitHub 用户名>@users.noreply.github.com"
 git config --global credential.helper store
-git push origin HEAD:refs/heads/flight-logs-test && git push origin --delete flight-logs-test
+git push https://github.com/Xiaolong-Li1904/adr_project.git HEAD:refs/heads/flight-logs-test && git push https://github.com/Xiaolong-Li1904/adr_project.git --delete flight-logs-test
 #   用户名 = GitHub 用户名，密码 = Personal Access Token（GitHub → Settings → Developer settings →
 #   Fine-grained tokens，只给这个仓库 Contents: Read and write）。token 明文存在本用户的 ~/.git-credentials。
 ```
 
 上传失败（没网等）不影响飞行，记录已在本地提交，下次 `./fly.sh` 会一起补传；
-状态在 `.git/flight-logs-push.log`。手动补传：`git push origin flight-logs`。
+状态在 `.git/flight-logs-push.log`。手动补传：`git push https://github.com/Xiaolong-Li1904/adr_project.git flight-logs`。
 
 看结果 / 估计真机延迟：
 

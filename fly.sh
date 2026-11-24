@@ -5,12 +5,13 @@
 #   ./fly.sh --render True       # extra arguments are passed to deploy.py
 #
 # After the flight (also after Ctrl+C) the new flight_logs/*.npz are committed to the local branch
-# flight-logs (without touching the checked-out code branch) and pushed in the background.
-# Env: FLY_REMOTE (default origin), FLY_CONFIG (default level2.toml), FLY_NO_PUSH=1 (commit only),
+# flight-logs (without touching the checked-out code branch) and pushed to adr_project in the background.
+# Env: FLY_REMOTE (default: adr_project on GitHub, no matter which repo was cloned),
+#      FLY_CONFIG (default level2.toml), FLY_NO_PUSH=1 (commit only),
 #      FLY_DEPLOY_CMD (replace the deploy command, e.g. a sim for testing).
 set -u
 cd "$(dirname "$0")"
-REMOTE=${FLY_REMOTE:-origin}
+REMOTE=${FLY_REMOTE:-https://github.com/Xiaolong-Li1904/adr_project.git}   # logs always go to adr_project
 BRANCH=flight-logs
 CONFIG=${FLY_CONFIG:-level2.toml}
 GITDIR=$(git rev-parse --git-dir)
@@ -69,5 +70,5 @@ if [ -n "${FLY_DEPLOY_CMD:-}" ] || [ "${PIXI_ENVIRONMENT_NAME:-}" = "deploy" ]; 
 # ---- upload in the background --------------------------------------------------------------------------
 if [ "${FLY_NO_PUSH:-0}" != "1" ]; then
     ( git push -q "$REMOTE" "$BRANCH:$BRANCH" > "$PUSHLOG" 2>&1 && echo "ok $(date +%T)" >> "$PUSHLOG" ) &
-    echo "[fly] uploading to $REMOTE/$BRANCH in the background (status: $PUSHLOG)"
+    echo "[fly] uploading to adr_project/$BRANCH in the background (status: $PUSHLOG)"
 fi
