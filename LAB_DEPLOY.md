@@ -37,8 +37,11 @@ pixi shell -e deploy
 export ADR_RL_POLICY=artifacts/race_init/l2_robust_tilt1.15.npz
 export ADR_KAPPA_FILE=$PWD/kappa.txt
 echo 0 > kappa.txt
-python scripts/deploy.py --config level2.toml
+./fly.sh                     # = python scripts/deploy.py --config level2.toml + 自动上传飞行记录
 ```
+
+`./fly.sh` 每飞完一次（包括 Ctrl+C）把新的 `flight_logs/*.npz` 提交到 `flight-logs` 分支并在后台
+push（代码分支不受影响），然后打印这次的结果。不想上传就直接用 `python scripts/deploy.py --config level2.toml`。
 
 摆门时可以在终端3先运行 `python scripts/nominal_frame_publisher.py --config level2.toml`，
 在 RViz 里添加 MarkerArray `/nominal_frames` 对照名义位置。
@@ -78,7 +81,7 @@ default_policy = Path(__file__).parents[2] / "artifacts/race_init/general_tilt1.
 `kappa.txt` 在每次 `deploy.py` 开始时重新读取，改文件即可：
 
 ```bash
-echo 0.3 > kappa.txt && python scripts/deploy.py --config level2.toml
+echo 0.3 > kappa.txt && ./fly.sh
 ```
 
 建议 0 → 0.3 → 0.5 → 0.7 → 1.0，每档飞稳了再往上加。
@@ -94,13 +97,28 @@ echo 0.3 > kappa.txt && python scripts/deploy.py --config level2.toml
 - `echo $ADR_RL_POLICY` 和 `cat kappa.txt` 确认网络和档位
 - 不摆门空飞练习：`level2.toml` 里 `real_track_objects = false`
 
-## 5b. 飞行记录（自动）
+## 5b. 飞行记录（自动）和上传
 
-每次 `deploy.py` 都会自动记录全部飞行数据（每步：时间、位置/速度/姿态/角速度、门和柱子、网络输入、
+每次飞行都会自动记录全部飞行数据（每步：时间、位置/速度/姿态/角速度、门和柱子、网络输入、
 网络输出、发出的指令），飞完或 Ctrl+C 时存到 `flight_logs/<日期>_<时间>_<网络>_k<kappa>.npz`。
 不影响控制（每步多约 0.05 ms）。`export ADR_LOG_DIR=` 置空可关闭。
 
-飞完看结果 / 估计真机延迟：
+用 `./fly.sh` 起飞时，记录会自动上传到 GitHub 的 `flight-logs` 分支（每次约 80 KB）。
+**第一次上传前**在实验室电脑设置一次（之后不再问密码）：
+
+```bash
+git config --global user.name  "<GitHub 用户名>"
+git config --global user.email "<GitHub 用户名>@users.noreply.github.com"
+git config --global credential.helper store
+git push origin HEAD:refs/heads/flight-logs-test && git push origin --delete flight-logs-test
+#   用户名 = GitHub 用户名，密码 = Personal Access Token（GitHub → Settings → Developer settings →
+#   Fine-grained tokens，只给这个仓库 Contents: Read and write）。用完在 GitHub 上删除这个 token。
+```
+
+上传失败（没网等）不影响飞行，记录已在本地提交，下次 `./fly.sh` 会一起补传；
+状态在 `.git/flight-logs-push.log`。手动补传：`git push origin flight-logs`。
+
+看结果 / 估计真机延迟：
 
 ```bash
 python scripts/analyze_flight_log.py              # 分析 flight_logs/ 下全部记录
@@ -109,7 +127,6 @@ python scripts/analyze_flight_log.py              # 分析 flight_logs/ 下全�
 每次飞行一行：用时、过门数、控制循环是否超时（`loop_steps_over_25ms`）、最大倾角/速度、
 `equiv_delay_steps` = 相当于仿真里的几步延迟（和训练的 delay 同一单位，1 步 = 20 ms，误差约 ±0.3 步）。
 最后一行是所有记录的中位数。约 1 → 用 `l2_delay1`；接近 0 或 ≥ 2 → 用 `l2_robust`。
-记录要带回来：`git add -f flight_logs && git commit -m "flight logs" && git push`。
 
 ## 6. 本地仿真（Windows 也能跑）
 
