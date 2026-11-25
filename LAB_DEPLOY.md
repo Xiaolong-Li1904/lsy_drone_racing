@@ -88,8 +88,9 @@ echo 0 > kappa.txt
 
 | 网络 (`artifacts/race_init/`) | 说明 |
 |---|---|
+| `l2_kp1_tilt1.15.npz` | **最新、最快**。按真机实测等效延迟约 **0.6 步**训练（延迟 0.4–0.8 步、推力 ±10 %）。延迟 0.6：kappa 0 98 %/3.84 s，kappa 1 93 %/3.64 s（比 l2_delay1 快约 0.25 s）。推力偏差超过 ±10 % 时退回 l2_robust |
 | `l2_robust_tilt1.15.npz` | **推荐起步**。延迟 0–2 步都训练过（kappa 1：无延迟 97 %/3.94 s，延迟1 98 %/4.07 s，延迟2 90 %/4.29 s） |
-| `l2_delay1_tilt1.15.npz` | 专门针对 **1 步延迟**（20 ms）。1 步延迟下最快最稳（kappa 0→1：100 %/4.11 → 99 %/3.88 s）；**无延迟时 kappa 1 只有 62 %** |
+| `l2_delay1_tilt1.15.npz` | 专门针对 **1 步延迟**（20 ms）（kappa 0→1：100 %/4.11 → 99 %/3.88 s）；**无延迟时 kappa 1 只有 62 %**；延迟 0.6 时这一系 kappa 1 约 82 % |
 | `general_tilt1.0.npz` | 不设 `ADR_RL_POLICY` 时的默认。通用保底，最慢（约 5.5 s），kappa 对它无效 |
 | `l2_risky_tilt1.4.npz` | 倾角上限 1.4 rad，超过真机能维持高度的 1.15，kappa > 0.5 可能掉高，慎用 |
 
@@ -98,7 +99,7 @@ echo 0 > kappa.txt
 - 回到默认网络：`unset ADR_RL_POLICY`
 - 改代码里的默认网络：`level2_rl_kappa_controller.py` 的 `default_policy`（环境变量优先）。
 - 文件名里的 `tilt` = 最大倾角（rad）。网络都是在 `level2.toml` 的赛道上训练的，**不要改门和柱子的位置**。
-- 原始训练名（kFclr、kD1 等）见 `artifacts/race_init/README.txt`。
+- 原始训练名（kFclr、kD1、kP1 等）和完整测试数据见 `artifacts/race_init/README.txt`。
 
 ## 4. 调激进程度 kappa（0 = 最稳，1 = 最快）
 
@@ -113,12 +114,12 @@ echo 0.3 > kappa.txt && ./fly.sh
 
 | 圈 | 网络 | kappa | 目的 |
 |---|---|---|---|
-| 1–3 | l2_robust | 0 | 确认整套系统、测延迟 |
-| 4 | l2_delay1 | 0 | 和 robust 对比 |
+| 1–2 | l2_robust | 0 | 确认整套系统、测延迟 |
+| 3 | l2_kp1 | 0 | 和 robust 对比 |
 | 之后 | 飞得好的那个 | 0.3 → 0.5 → 0.7 → 1.0 | 提速 |
 
-延迟（第 5 节 `equiv_delay_steps`）约 1 步 → 用 `l2_delay1`；接近 0 或 ≥ 2 → 用 `l2_robust`。
-`l2_delay1` 晃动或过冲 → 退回 `l2_robust`。
+延迟（第 5 节 `equiv_delay_steps`）约 0.4–0.8 步 → `l2_kp1`；约 1 步 → `l2_delay1`；接近 0 或 ≥ 1.5 → `l2_robust`。
+新网络晃动、过冲或掉高（推力不对）→ 退回 `l2_robust`。
 
 ## 5. 飞行记录和上传
 
